@@ -1,0 +1,274 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NizThaHn</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #060913;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            perspective: 1200px;
+            cursor: pointer;
+        }
+
+        .ambient-glow {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            background: 
+                radial-gradient(circle at 20% 20%, rgba(0, 229, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(114, 9, 183, 0.06) 0%, transparent 50%);
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .mouse-blur {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(0, 229, 255, 0.12) 0%, rgba(114, 9, 183, 0.04) 50%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            mix-blend-mode: screen;
+            filter: blur(50px);
+            z-index: 2;
+            transform: translate(-50%, -50%);
+            transition: transform 0.1s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        #rippleContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 4;
+            pointer-events: none;
+        }
+
+        .fluid-ripple {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%) scale(0);
+            filter: url(#water-filter); 
+            box-shadow: 
+                inset 0 0 40px rgba(0, 229, 255, 0.3),
+                0 0 30px rgba(114, 9, 183, 0.2),
+                0 0 60px rgba(0, 229, 255, 0.1);
+            border: 2px solid rgba(0, 229, 255, 0.4);
+            animation: fluid-wave 3.5s cubic-bezier(0.1, 0.4, 0.1, 1) forwards;
+        }
+
+        @keyframes fluid-wave {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                width: 0px;
+                height: 0px;
+                opacity: 0.9;
+            }
+            20% {
+                opacity: 0.7;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1);
+                width: 3800px;
+                height: 3800px;
+                opacity: 0;
+                border-width: 0.5px;
+            }
+        }
+
+        .card-container {
+            position: relative;
+            z-index: 5;
+            background: rgba(8, 11, 19, 0.55);
+            border: 1px solid rgba(0, 229, 255, 0.15);
+            padding: 3rem;
+            border-radius: 24px;
+            text-align: center;
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6);
+            transform: translateZ(60px);
+            color: #fff;
+            max-width: 460px;
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            pointer-events: auto;
+        }
+
+        .card-container h1 {
+            font-size: 2.6rem;
+            margin-bottom: 1.2rem;
+            background: linear-gradient(135deg, #00e5ff, #9d4edd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 3px;
+        }
+
+        .card-container p {
+            color: #94a3b8;
+            font-size: 1.05rem;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+<body>
+
+    <svg style="position: absolute; width: 0; height: 0;">
+        <defs>
+            <filter id="water-filter">
+                <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="3" result="noise" />
+                <feDisplacementMap in="SourceGraphic" in2="noise" scale="40" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+        </defs>
+    </svg>
+
+    <div class="ambient-glow"></div>
+    <div class="mouse-blur" id="mouseBlur"></div>
+    <canvas id="particleCanvas"></canvas>
+    <div id="rippleContainer"></div>
+
+    <div class="card-container" id="card">
+        <h1>Thahn pờ gô jếck</h1>
+        <p><b>ThaHn</b> ?</p>
+    </div>
+
+    <script>
+        const mouseBlur = document.getElementById('mouseBlur');
+        const card = document.getElementById('card');
+        const canvas = document.getElementById('particleCanvas');
+        const rippleContainer = document.getElementById('rippleContainer');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const particlesArray = [];
+        const numberOfParticles = 65;
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2.5 + 0.3; 
+                this.speedX = Math.random() * 0.2 - 0.1; 
+                this.speedY = Math.random() * 0.2 - 0.1;
+                this.opacity = Math.random() * 0.4 + 0.1;
+            }
+
+            update(mouseX, mouseY) {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (mouseX && mouseY) {
+                    let dx = this.x - mouseX;
+                    let dy = this.y - mouseY;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < 160) {
+                        let force = (160 - distance) / 160;
+                        this.x += (dx / distance) * force * 0.8;
+                        this.y += (dy / distance) * force * 0.8;
+                    }
+                }
+
+                if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
+            }
+
+            draw() {
+                ctx.fillStyle = `rgba(0, 229, 255, ${this.opacity})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < numberOfParticles; i++) {
+            particlesArray.push(new Particle());
+        }
+
+        let mouse = { x: undefined, y: undefined };
+        let targetMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+
+            const xAxis = (window.innerWidth / 2 - e.clientX) / 35;
+            const yAxis = (window.innerHeight / 2 - e.clientY) / 35;
+            card.style.transform = `rotateY(${xAxis}deg) rotateX(${-yAxis}deg) translateZ(60px)`;
+        });
+
+        window.addEventListener('mouseleave', () => {
+            card.style.transform = `rotateY(0deg) rotateX(0deg) translateZ(0px)`;
+            mouse.x = undefined;
+            mouse.y = undefined;
+        });
+
+        window.addEventListener('click', (e) => {
+            const ripple = document.createElement('div');
+            ripple.classList.add('fluid-ripple');
+            
+            ripple.style.left = `${e.clientX}px`;
+            ripple.style.top = `${e.clientY}px`;
+
+            rippleContainer.appendChild(ripple);
+
+            setTimeout(() => {
+                ripple.remove();
+            }, 3500);
+        });
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (mouse.x !== undefined) {
+                targetMouse.x += (mouse.x - targetMouse.x) * 0.06;
+                targetMouse.y += (mouse.y - targetMouse.y) * 0.06;
+            }
+
+            mouseBlur.style.left = `${targetMouse.x}px`;
+            mouseBlur.style.top = `${targetMouse.y}px`;
+
+            for (let i = 0; i < particlesArray.length; i++) {
+                particlesArray[i].update(mouse.x, mouse.y);
+                particlesArray[i].draw();
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
